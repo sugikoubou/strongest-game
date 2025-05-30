@@ -13,14 +13,14 @@ var admin = require("firebase-admin");
 let serviceAccount; // 変数をletで宣言
 
 try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  if (process.env.GAME_JSON) {
     // Render環境など、環境変数からJSON文字列をパースして使用
-    console.log("Found FIREBASE_SERVICE_ACCOUNT_JSON environment variable."); // デバッグ用ログ
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON); // ★★★ ここが重要 ★★★
+    console.log("Found GAME_JSON environment variable."); // デバッグ用ログ
+    serviceAccount = JSON.parse(process.env.GAME_JSON); // ★★★ ここが重要 ★★★
   } else {
     // ローカル開発環境など、直接ファイルを読み込む場合 (フォールバック)
     // このパスはローカルでのファイル配置に合わせてください
-    console.log("FIREBASE_SERVICE_ACCOUNT_JSON not found, trying local file require."); // デバッグ用ログ
+    console.log("GAME_JSON not found, trying local file require."); // デバッグ用ログ
     serviceAccount = require("./strongest-game-key.json"); // 例: ローカルのファイルパス
   }
 

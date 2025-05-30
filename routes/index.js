@@ -4,15 +4,23 @@ var router = express.Router();
 var MersenneTwister = require('mersenne-twister');
 var generator = new MersenneTwister();
 
-/* GET home page. */
-// router.get('/', function(req, res, next) {
-//   res.render('index', { title: 'Express' });
-// });
+// Google AI SDKの初期化は app.js で行い、req.generativeModel として渡される想定
+// const { GoogleGenerativeAI } = require("@google/generative-ai");
+// let genAI, generativeModel;
+// if (process.env.GEMINI_API_KEY) {
+//     genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+//     generativeModel = genAI.getGenerativeModel({
+//         model: "gemini-1.5-flash-latest",
+//         generationConfig: {
+//             responseMimeType: "application/json",
+//         }
+//     });
+//     console.log("Google AI SDK initialized in routes/index.js.");
+// } else {
+//     console.warn("GEMINI_API_KEY is not set in routes/index.js. AI battle functionality will be disabled or use fallback.");
+// }
 
-
-// import { LoremIpsum } from 'lorem-ipsum';
 const LoremIpsum = require('lorem-ipsum').LoremIpsum;
-
 const lorem = new LoremIpsum({
   sentencesPerParagraph: {
     max: 8,
@@ -24,162 +32,327 @@ const lorem = new LoremIpsum({
   }
 });
 
-
+/* POST create new character */
 router.post('/create-character', async function(req, res, next) {
   try {
-    // フォームからの入力を取得 (バリデーションは別途実装を推奨)
     const { charName, specialAbility, strength, intelligence, agility } = req.body;
-    // ユーザーIDの取得（前回の例に基づき、ここではリクエストボディまたはクエリから取得）
-    const userId = req.body.userId || req.query.userId || 'defaultUser'; // 適切なユーザー識別方法に置き換えてください
+    const userId = req.body.userId || req.query.userId || 'defaultUser';
+
+    if (!charName || !specialAbility || strength === undefined || intelligence === undefined || agility === undefined) {
+      // res.render('index', { error: 'キャラクター名、特殊能力、全てのパラメータを入力してください。', userId: userId, characters: [], title: 'キャラクター対戦ゲーム', success: null });
+      // 上記は characters が未定義になる可能性があるので、リダイレクトかエラーメッセージ表示が良い
+      return res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('未入力の項目があります。')}`);
+    }
+
+    const s = parseInt(strength) || 0;
+    const i = parseInt(intelligence) || 0;
+    const a = parseInt(agility) || 0;
+
+    if (s < 0 || i < 0 || a < 0 || s > 20 || i > 20 || a > 20) {
+      return res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('各パラメータは0から20の間で入力してください。')}`);
+    }
+    if (s + i + a > 20) {
+      return res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('パラメータの合計は20を超えることはできません。')}`);
+    }
+
 
     const newCharacterData = {
       name: charName,
       ability: specialAbility,
-      strength: parseInt(strength) || 0,
-      intelligence: parseInt(intelligence) || 0,
-      agility: parseInt(agility) || 0,
-      wins: 0, // 初期勝利数
-      losses: 0, // 初期敗北数
-      createdAt: new Date().toISOString(), // 作成日時 (サーバータイムスタンプも利用可)
-      // userId: userId // 必要であればキャラクターデータにユーザーIDも紐付ける
+      strength: s,
+      intelligence: i,
+      agility: a,
+      wins: 0,
+      losses: 0,
+      createdAt: new Date().toISOString(),
     };
 
-    // Firebase Realtime Databaseに保存
-    // 'characters' のパスは、ユーザーごとにデータを分ける場合は `users/${userId}/characters` のように変更
-    const newCharRef = await req.db.ref(`users/${userId}/characters`).push(newCharacterData);
-    // または、全ユーザー共通のキャラクターリストなら
-    // const newCharRef = await req.db.ref("characters").push(newCharacterData);
+    const charactersRefPath = `users/${userId}/characters`;
+    const newCharRef = await req.db.ref(charactersRefPath).push(newCharacterData);
 
-    console.log("New character created with ID:", newCharRef.key);
-    res.redirect(`/?userId=${encodeURIComponent(userId)}&success=char_created`); // 成功メッセージと共にリダイレクト
+    console.log(`New character created for user ${userId} with ID: ${newCharRef.key}`);
+    res.redirect(`/?userId=${encodeURIComponent(userId)}&success=char_created`);
   } catch (error) {
     console.error("Error creating character:", error);
     const userId = req.body.userId || req.query.userId || 'defaultUser';
-    // エラー発生時は、フォーム画面にエラーメッセージを表示するなどの処理
-    // res.render('index', { error: 'キャラクターの作成に失敗しました。', userId: userId, /* 他の必要なデータ */ });
-    next(error); // またはエラーハンドリングミドルウェアに渡す
+    // next(error) を使うと Express のエラーハンドラに渡る
+    // ユーザーフレンドリーなエラーページにリダイレクトするか、メッセージを表示
+    res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('キャラクター作成中にエラーが発生しました。')}`);
   }
 });
 
-
-
-
-// 対戦処理と戦績更新
+/* POST handle battle and update stats */
 router.post('/battle', async function(req, res, next) {
-  try {
-    const { fighter1Id, fighter2Id } = req.body; // フォームから対戦するキャラのIDを取得
-    // ユーザーIDの取得
-    const userId = req.body.userId || req.query.userId || 'defaultUser';
+  const userId = req.body.userId || req.query.userId || 'defaultUser';
+  let fighter1Data, fighter2Data; // res.render で使えるようにスコープを広くする
+  let fighter1Id, fighter2Id; // 同上
 
-    if (!fighter1Id || !fighter2Id || fighter1Id === fighter2Id) {
-      // エラーハンドリング: 適切なキャラクターが選択されていない
-      return res.status(400).send("対戦する2体の異なるキャラクターを選択してください。");
+  try {
+    fighter1Id = req.body.fighter1Id;
+    fighter2Id = req.body.fighter2Id;
+
+    if (!req.generativeModel) {
+      console.error("Gemini AI model (req.generativeModel) is not initialized. Check API Key and app.js setup.");
+      // AIが使えない場合のエラーメッセージか、フォールバック処理
+      // ここでは仮の勝者で進めるか、エラーを返す
+      // return res.status(500).send("AI判定機能が利用できません。管理者に連絡してください。");
+      // 開発中は仮のロジックで進めることもできる
+      console.warn("Fallback: AI model not available, using placeholder battle logic.");
+      // (この後のDB取得は行うが、AI判定はスキップするフラグを立てるなど)
     }
 
-    // キャラクターデータをDBから取得
-    const fighter1Ref = req.db.ref(`users/${userId}/characters/${fighter1Id}`);
-    const fighter2Ref = req.db.ref(`users/${userId}/characters/${fighter2Id}`);
-    // または全ユーザー共通の場合
-    // const fighter1Ref = req.db.ref(`characters/${fighter1Id}`);
-    // const fighter2Ref = req.db.ref(`characters/${fighter2Id}`);
+    if (!fighter1Id || !fighter2Id) {
+      return res.status(400).render('battle_result', {
+        error: "対戦するキャラクターを2体選択してください。",
+        userId: userId
+      });
+    }
+    if (fighter1Id === fighter2Id) {
+      return res.status(400).render('battle_result', {
+        error: "同じキャラクター同士は対戦できません。",
+        userId: userId,
+        fighter1Name: (await req.db.ref(`users/${userId}/characters/${fighter1Id}`).once('value')).val()?.name || fighter1Id
+      });
+    }
 
+    const charactersBasePath = `users/${userId}/characters`;
+    const fighter1Ref = req.db.ref(`${charactersBasePath}/${fighter1Id}`);
+    const fighter2Ref = req.db.ref(`${charactersBasePath}/${fighter2Id}`);
 
     const fighter1Snapshot = await fighter1Ref.once('value');
     const fighter2Snapshot = await fighter2Ref.once('value');
 
     if (!fighter1Snapshot.exists() || !fighter2Snapshot.exists()) {
-      return res.status(404).send("指定されたキャラクターが見つかりません。");
+      return res.status(404).render('battle_result', {
+        error: "指定されたキャラクターのどちらか、または両方が見つかりません。",
+        userId: userId
+      });
     }
 
-    const fighter1Data = fighter1Snapshot.val();
-    const fighter2Data = fighter2Snapshot.val();
+    fighter1Data = fighter1Snapshot.val();
+    fighter2Data = fighter2Snapshot.val();
+    fighter1Data.id = fighter1Id; // IDもデータに含めておく
+    fighter2Data.id = fighter2Id; // IDもデータに含めておく
 
-    // --- ここにGemini AIなどによる勝敗判定ロジックが入る ---
-    // 仮にfighter1が勝利したとする
-    let winnerId = fighter1Id;
-    let loserId = fighter2Id;
-    // let battleOutcome = await callGeminiToDetermineWinner(fighter1Data, fighter2Data);
-    // winnerId = battleOutcome.winnerId; // Geminiからの結果を解析
-    // loserId = battleOutcome.loserId;
-    // --- 勝敗判定ロジックここまで ---
+    let winnerId, loserId;
+    let battleReason = "判定理由なし";
+    let winnerNameDisplay, loserNameDisplay;
+
+    if (req.generativeModel) { // AIモデルが利用可能な場合のみAI判定
+        const prompt = `
+あなたは公平なゲームの審判です。以下の2体のキャラクターの能力を比較し、どちらが戦闘で勝利するかを判定してください。
+判定理由も簡潔に説明し、必ず以下のJSON形式で回答してください。
+
+キャラクターA:
+名前: ${fighter1Data.name}
+特殊能力: ${fighter1Data.ability}
+ちから: ${fighter1Data.strength}
+かしこさ: ${fighter1Data.intelligence}
+すばやさ: ${fighter1Data.agility}
+
+キャラクターB:
+名前: ${fighter2Data.name}
+特殊能力: ${fighter2Data.ability}
+ちから: ${fighter2Data.strength}
+かしこさ: ${fighter2Data.intelligence}
+すばやさ: ${fighter2Data.agility}
+
+判定基準:
+- 各パラメータ (ちから、かしこさ、すばやさ) は戦闘において重要な要素です。合計値は最大20です。
+- 特殊能力は、パラメータの有利不利を覆すこともあります。能力のユニークさや戦闘への影響度を考慮してください。
+- キャラクターの組み合わせや相性も考慮し、総合的に判断してください。
+
+出力形式 (JSON):
+{
+  "winnerName": "[勝利したキャラクターの名前]",
+  "reason": "[具体的な判定理由]"
+}
+`;
+        try {
+            const result = await req.generativeModel.generateContent(prompt);
+            const response = result.response;
+            const candidate = response.candidates && response.candidates[0];
+
+            if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text) {
+                const aiResponseText = candidate.content.parts[0].text;
+                console.log("Gemini AI Raw Response:", aiResponseText);
+                const battleOutcome = JSON.parse(aiResponseText); // GeminiからのJSON文字列をパース
+
+                if (battleOutcome.winnerName === fighter1Data.name) {
+                    winnerId = fighter1Id;
+                    loserId = fighter2Id;
+                    winnerNameDisplay = fighter1Data.name;
+                    loserNameDisplay = fighter2Data.name;
+                } else if (battleOutcome.winnerName === fighter2Data.name) {
+                    winnerId = fighter2Id;
+                    loserId = fighter1Id;
+                    winnerNameDisplay = fighter2Data.name;
+                    loserNameDisplay = fighter1Data.name;
+                } else {
+                    console.warn("AI did not return a clear winner name matching input. Defaulting...", battleOutcome);
+                    // フォールバック: AIが明確な勝者を返さなかった場合、ランダムまたはパラメータ比較で決定
+                    // ここでは仮にパラメータ合計が高い方を勝者とする
+                    const total1 = fighter1Data.strength + fighter1Data.intelligence + fighter1Data.agility;
+                    const total2 = fighter2Data.strength + fighter2Data.intelligence + fighter2Data.agility;
+                    if (total1 >= total2) {
+                        winnerId = fighter1Id; loserId = fighter2Id;
+                        winnerNameDisplay = fighter1Data.name; loserNameDisplay = fighter2Data.name;
+                    } else {
+                        winnerId = fighter2Id; loserId = fighter1Id;
+                        winnerNameDisplay = fighter2Data.name; loserNameDisplay = fighter1Data.name;
+                    }
+                    battleReason = "AIの判定が不明確だったため、パラメータ合計で判定しました。";
+                }
+                battleReason = battleOutcome.reason || battleReason; // AIの理由があれば採用
+            } else {
+                 throw new Error("Invalid AI response structure from Gemini.");
+            }
+        } catch (aiError) {
+            console.error("Error during Gemini AI call or parsing:", aiError);
+            // AIエラー時のフォールバック処理
+            // ここでは仮にパラメータ合計が高い方を勝者とする
+            const total1 = fighter1Data.strength + fighter1Data.intelligence + fighter1Data.agility;
+            const total2 = fighter2Data.strength + fighter2Data.intelligence + fighter2Data.agility;
+            if (total1 >= total2) {
+                winnerId = fighter1Id; loserId = fighter2Id;
+                winnerNameDisplay = fighter1Data.name; loserNameDisplay = fighter2Data.name;
+            } else {
+                winnerId = fighter2Id; loserId = fighter1Id;
+                winnerNameDisplay = fighter2Data.name; loserNameDisplay = fighter1Data.name;
+            }
+            battleReason = "AI判定中にエラーが発生したため、パラメータ合計で判定しました。";
+        }
+    } else {
+        // AIモデルが利用できない場合のフォールバック (仮ロジック)
+        console.warn("AI model not available. Using placeholder battle logic (fighter1 wins).");
+        winnerId = fighter1Id;
+        loserId = fighter2Id;
+        winnerNameDisplay = fighter1Data.name;
+        loserNameDisplay = fighter2Data.name;
+        battleReason = "AI機能が無効です。仮の判定結果です。";
+    }
 
     // 戦績更新
-    const winnerRef = req.db.ref(`users/${userId}/characters/${winnerId}/wins`);
-    const loserRef = req.db.ref(`users/${userId}/characters/${loserId}/losses`);
-    // または全ユーザー共通の場合
-    // const winnerRef = req.db.ref(`characters/${winnerId}/wins`);
-    // const loserRef = req.db.ref(`characters/${loserId}/losses`);
+    const winnerRef = req.db.ref(`${charactersBasePath}/${winnerId}/wins`);
+    const loserRef = req.db.ref(`${charactersBasePath}/${loserId}/losses`);
 
-    // トランザクションを使って安全にインクリメントする (より堅牢)
     await winnerRef.transaction(currentWins => (currentWins || 0) + 1);
     await loserRef.transaction(currentLosses => (currentLosses || 0) + 1);
 
-    console.log(`Battle result: ${winnerId} wins, ${loserId} loses. Stats updated.`);
+    console.log(`Battle result for user ${userId}: ${winnerNameDisplay} wins, ${loserNameDisplay} loses. Stats updated.`);
 
-    // 対戦結果を表示するページにリダイレクト、または結果をレンダリング
     res.render('battle_result', {
-      winner: winnerId === fighter1Id ? fighter1Data.name : fighter2Data.name,
-      loser: loserId === fighter1Id ? fighter1Data.name : fighter2Data.name,
-      // ...他の結果情報
+      winner: winnerNameDisplay,
+      loser: loserNameDisplay,
+      reason: battleReason,
+      fighter1: fighter1Data, // 詳細表示用にキャラクターデータも渡す
+      fighter2: fighter2Data, // 詳細表示用にキャラクターデータも渡す
       userId: userId
     });
 
   } catch (error) {
     console.error("Error during battle:", error);
-    next(error);
+    // エラー発生時は、エラー内容をbattle_resultテンプレートに渡して表示
+    res.status(500).render('battle_result', {
+        error: "対戦処理中に予期せぬエラーが発生しました: " + error.message,
+        userId: userId,
+        fighter1: fighter1Data, // エラー時でも取得できていれば渡す
+        fighter2: fighter2Data
+    });
   }
 });
 
-
+/* GET home page. */
 router.get('/', async function(req, res, next) {
-  const userId = req.query.userId || 'defaultUser'; // 適切なユーザー識別方法
+  const userId = req.query.userId || 'defaultUser';
   let successMessage = null;
+  let errorMessage = null;
+
   if (req.query.success === 'char_created') {
     successMessage = 'キャラクターが正常に作成されました！';
   }
+  if (req.query.error) {
+    errorMessage = decodeURIComponent(req.query.error);
+  }
+
 
   try {
-    const charactersRef = req.db.ref(`users/${userId}/characters`).orderByChild('createdAt'); // 例: 作成日時でソート
-    // または全ユーザー共通の場合
-    // const charactersRef = req.db.ref("characters").orderByChild('createdAt');
-
-    const snapshot = await charactersRef.once('value');
-    const charactersData = snapshot.val();
+    const charactersRefPath = `users/${userId}/characters`;
+    // Firebase Realtime Database では orderByChild().limitToLast(N) のような形で取得後、クライアント/サーバーで逆順にする
+    // または、全件取得してサーバーサイドでソート・フィルタリング
+    const charactersSnapshot = await req.db.ref(charactersRefPath).orderByChild('createdAt').once('value');
+    const charactersData = charactersSnapshot.val();
     const charactersList = [];
+    let topCharacters = [];
+
     if (charactersData) {
       for (const key in charactersData) {
+        const char = charactersData[key];
+        const totalGames = (char.wins || 0) + (char.losses || 0);
+        const winRate = totalGames > 0 ? (char.wins || 0) / totalGames : 0;
         charactersList.push({
           id: key,
-          name: charactersData[key].name,
-          ability: charactersData[key].ability,
-          strength: charactersData[key].strength,
-          intelligence: charactersData[key].intelligence,
-          agility: charactersData[key].agility,
-          wins: charactersData[key].wins || 0, // winsが未定義の場合0
-          losses: charactersData[key].losses || 0 // lossesが未定義の場合0
+          name: char.name,
+          ability: char.ability,
+          strength: char.strength,
+          intelligence: char.intelligence,
+          agility: char.agility,
+          wins: char.wins || 0,
+          losses: char.losses || 0,
+          totalGames: totalGames,
+          winRate: winRate,
+          createdAt: char.createdAt // ソートや表示に使う場合
         });
       }
+      // サーバーサイドでキャラクターリストを勝率順にソート
+      charactersList.sort((a, b) => {
+        if (b.winRate !== a.winRate) {
+          return b.winRate - a.winRate; // 勝率の高い順
+        }
+        if (b.totalGames !== a.totalGames) {
+            return b.totalGames - a.totalGames; // 次に試合数の多い順
+        }
+        return (a.createdAt > b.createdAt) ? -1 : 1; // さらに作成日時の新しい順
+      });
+      topCharacters = charactersList.slice(0, 5); // 上位5名
     }
-    // createdAtでソートした場合は、逆順にして新しいものが上に来るようにする例
-    // charactersList.reverse();
 
-    // Pugテンプレートに渡す locals オブジェクトに characters を含める
+
     res.render('index', {
       title: 'キャラクター対戦ゲーム',
       userId: userId,
-      characters: charactersList, // 取得したキャラクターリスト
+      characters: charactersList, // ソート済みの全キャラクターリスト
+      topCharacters: topCharacters, // 勝率上位5名のリスト
       success: successMessage,
-      error: null // エラーメッセージ用の変数も用意
-      // ... 他の必要なデータ
+      error: errorMessage
     });
   } catch (error) {
     console.error("Error fetching characters for index page:", error);
-    next(error);
+    next(error); // Express のエラーハンドラへ
   }
 });
 
+/* POST delete character */
+router.post('/delete-character/:charId', async function(req, res, next) {
+    const userId = req.body.userId || req.query.userId || 'defaultUser';
+    const charId = req.params.charId;
+
+    if (!userId || !charId) {
+        return res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('削除対象の指定が不適切です。')}`);
+    }
+    try {
+        const characterRefPath = `users/${userId}/characters/${charId}`;
+        await req.db.ref(characterRefPath).remove();
+        console.log(`Character ${charId} for user ${userId} deleted.`);
+        res.redirect(`/?userId=${encodeURIComponent(userId)}&success=char_deleted`);
+    } catch (error) {
+        console.error("Error deleting character:", error);
+        res.redirect(`/?userId=${encodeURIComponent(userId)}&error=${encodeURIComponent('キャラクター削除中にエラーが発生しました。')}`);
+    }
+});
 
 
+// --- 以下、ランダムコンテンツ生成関数群 (変更なし) ---
 function randomArticle() {
   var articles = ['a', 'the'];
   return articles[Math.floor(generator.random() * articles.length)];
@@ -659,7 +832,7 @@ function sentenceM(seed) {
 
 function randomSentence(seed) {
   sentences = [sentenceA, sentenceB, sentenceC, sentenceD, sentenceE, sentenceF,
-     sentenceG, sentenceH, sentenceI, sentenceJ, sentenceK, sentenceL, sentenceM];
+       sentenceG, sentenceH, sentenceI, sentenceJ, sentenceK, sentenceL, sentenceM];
   sentence = sentences[Math.floor(generator.random() * sentences.length)](seed++);
   return sentence.charAt(0).toUpperCase() + sentence.slice(1);
   // return 'seed: ' + seed + '.';

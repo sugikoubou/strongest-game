@@ -4,6 +4,32 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 
+
+// app.js の冒頭あたり
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+let genAI, generativeModelInstance; // グローバルまたはappのローカル変数として保持
+if (process.env.GEMINI_API_KEY) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    generativeModelInstance = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash-latest",
+        generationConfig: {
+            responseMimeType: "application/json",
+        }
+    });
+    console.log("Google AI SDK (generativeModelInstance) initialized in app.js.");
+} else {
+    console.warn("GEMINI_API_KEY is not set in app.js. AI battle functionality will be disabled.");
+}
+
+// ミドルウェアで generativeModel をリクエストオブジェクトに追加
+app.use(function(req, res, next){
+  req.db = admin.database(); // 既存のDB参照
+  if (generativeModelInstance) {
+    req.generativeModel = generativeModelInstance; // Geminiモデルの参照を追加
+  }
+  next();
+});
+
 // Firebase Admin SDK のインポートと初期化
 var admin = require("firebase-admin");
 // ↓↓↓ サービスアカウントキーのJSONファイルへのパスを指定してください ↓↓↓

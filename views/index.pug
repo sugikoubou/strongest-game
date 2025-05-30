@@ -1,5 +1,135 @@
 extends layout
 
 block content
-  h1= title
-  p Welcome to #{title}
+  // ユーザーID関連の表示・変更フォーム
+  div.container.user-id-section
+    h1 キャラクター対戦ゲーム
+    p 現在のユーザーID: #[strong #{userId}]
+    form(action="/", method="GET", class="user-id-form")
+      div.form-group
+        label(for="changeUserIdInput") ユーザーIDを変更:
+        input(type="text", id="changeUserIdInput", name="userId", value=userId, class="form-control")
+      button(type="submit", class="btn btn-secondary") ユーザーID適用
+  
+  // メッセージ表示エリア
+  if error
+    div.container.alert.alert-danger #{error}
+  if success
+    div.container.alert.alert-success #{success}
+
+  // キャラクター作成フォーム
+  div.container.character-creation-form
+    h2 キャラクター作成
+    form(action="/create-character", method="POST")
+      input(type="hidden", name="userId", value=userId)
+      div.form-group
+        label(for="charNameInput") キャラクター名:
+        input(type="text", id="charNameInput", name="charName", required, class="form-control")
+      div.form-group
+        label(for="specialAbilityInput") 特殊能力:
+        input(type="text", id="specialAbilityInput", name="specialAbility", required, class="form-control")
+      
+      h3 パラメータ (合計 #[span#totalPointsDisplay 0]/20)
+      div.form-group.param-group
+        label(for="strengthRange") ちから: #[span#strengthValue 0]
+        input(type="range", id="strengthRange", name="strength", min="0", max="20", value="0", class="form-control-range")
+      div.form-group.param-group
+        label(for="intelligenceRange") かしこさ: #[span#intelligenceValue 0]
+        input(type="range", id="intelligenceRange", name="intelligence", min="0", max="20", value="0", class="form-control-range")
+      div.form-group.param-group
+        label(for="agilityRange") すばやさ: #[span#agilityValue 0]
+        input(type="range", id="agilityRange", name="agility", min="0", max="20", value="0", class="form-control-range")
+      p#pointsWarning(style="color:red; display:none;") 合計ポイントは20を超えることはできません。
+      
+      button(type="submit", class="btn btn-primary") このキャラクターを登録
+
+  // 勝率ランキング (上位5名)
+  div.container.ranking-section
+    h2 勝率ランキング
+    if topCharacters && topCharacters.length > 0
+      ol.character-list.ranking-list
+        each char, index in topCharacters
+          li.character-item
+            span.rank #{index + 1}. 
+            strong.name #{char.name}
+            span.details (能力: #{char.ability})
+            span.stats - 戦績: #{char.wins || 0}勝 #{char.losses || 0}敗 (全#{char.totalGames || 0}戦)
+            span.win-rate - 勝率: #{char.winRate !== undefined && char.totalGames > 0 ? (char.winRate * 100).toFixed(1) + '%' : (char.totalGames === 0 ? '0.0%' : 'N/A')}
+    else
+      p ランキング対象のキャラクターがいません。
+
+  // (任意) 全キャラクターリスト表示と対戦選択フォーム
+  div.container.full-character-list-section
+    h2 全キャラクターリスト (#{userId})
+    if characters && characters.length > 0
+      form(action="/battle", method="POST")
+        input(type="hidden", name="userId", value=userId)
+        div.battle-selection
+          div.fighter-select
+            label(for="fighter1Select") 対戦者1:
+            select(id="fighter1Select", name="fighter1Id", required, class="form-control")
+              option(value="") --選択してください--
+              each char in characters
+                option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
+          div.fighter-select
+            label(for="fighter2Select") 対戦者2:
+            select(id="fighter2Select", name="fighter2Id", required, class="form-control")
+              option(value="") --選択してください--
+              each char in characters
+                option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
+        button(type="submit", class="btn btn-danger btn-battle") 対戦開始！
+      
+      hr
+      h3 登録済み:
+      ul.character-list.all-chars-list
+        each char in characters // characters はソート前の全リストか、別途ソートされたリスト
+          li.character-item
+            strong.name #{char.name}
+            span.details (能力: #{char.ability}, 力: #{char.strength}, 知: #{char.intelligence}, 速: #{char.agility})
+            span.stats - 戦績: #{char.wins || 0}勝 #{char.losses || 0}敗
+            //- 削除ボタンなど、必要に応じて追加
+            form(action=`/delete-character/${char.id}?userId=${userId}`, method="POST", style="display: inline; margin-left: 10px;" onsubmit="return confirm('本当に「' + '#{char.name}' + '」を削除しますか？');")
+              input(type="hidden", name="userId", value=userId) // 削除時にもuserIdを渡す
+              button(type="submit", class="btn btn-sm btn-outline-danger") 削除
+    else
+      p キャラクターがいません。作成してください。
+
+  // クライアントサイドJavaScript (パラメータ合計計算)
+  script.
+    const strengthSlider = document.getElementById('strengthRange');
+    const intelligenceSlider = document.getElementById('intelligenceRange');
+    const agilitySlider = document.getElementById('agilityRange');
+    const strengthValueDisplay = document.getElementById('strengthValue');
+    const intelligenceValueDisplay = document.getElementById('intelligenceValue');
+    const agilityValueDisplay = document.getElementById('agilityValue');
+    const totalPointsDisplay = document.getElementById('totalPointsDisplay');
+    const pointsWarning = document.getElementById('pointsWarning');
+    const createFormSubmitButton = document.querySelector('form[action="/create-character"] button[type="submit"]');
+    const MAX_POINTS = 20;
+
+    function updatePoints() {
+      const s = parseInt(strengthSlider.value);
+      const i = parseInt(intelligenceSlider.value);
+      const a = parseInt(agilitySlider.value);
+      const total = s + i + a;
+
+      strengthValueDisplay.textContent = s;
+      intelligenceValueDisplay.textContent = i;
+      agilityValueDisplay.textContent = a;
+      totalPointsDisplay.textContent = total;
+
+      if (total > MAX_POINTS) {
+        pointsWarning.style.display = 'block';
+        if(createFormSubmitButton) createFormSubmitButton.disabled = true;
+      } else {
+        pointsWarning.style.display = 'none';
+        if(createFormSplitter) createFormSubmitButton.disabled = false;
+      }
+    }
+
+    if (strengthSlider && intelligenceSlider && agilitySlider) {
+      [strengthSlider, intelligenceSlider, agilitySlider].forEach(slider => {
+        slider.addEventListener('input', updatePoints);
+      });
+      updatePoints(); // 初期表示のため呼び出し
+    }

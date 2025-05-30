@@ -2,11 +2,19 @@ extends layout
 
 block content
   h1= title
-
-  each paragraph in paragraphs
-    p=paragraph
-
-  h2 See Also:
-
-  each link in links
-    p: a(href=link["href"])=link["title"]
+  if data
+    h2 受信データ:
+    pre #{JSON.stringify(data, null, 2)}
+  else
+    p データがありません。
+  
+  hr
+  h2 データ保存フォーム (例)
+  form(method="POST" action="/save-data")
+    div
+      label(for="nameInput") 名前:
+      input(type="text" id="nameInput" name="name" value="テストキャラ")
+    div
+      label(for="valueInput") 値:
+      input(type="number" id="valueInput" name="value" value="100")
+    button(type="submit") 保存

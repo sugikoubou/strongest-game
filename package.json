@@ -6,11 +6,15 @@
     "start": "node ./bin/www"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "clean-css": "^4.1.11",
     "constantinople": "^3.1.1",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
     "express": "~4.16.1",
+    "firebase-admin": "^13.4.0",
     "http-errors": "~1.6.3",
     "lorem-ipsum": "^2.0.3",
     "md5": "^2.2.1",
@@ -18,5 +22,10 @@
     "morgan": "~1.9.1",
     "pug": "^2.0.4",
     "uglify-js": "^2.6.0"
-  }
+  },
+  "description": "App Platform にデプロイできる Node.js を使用したサンプルアプリを提供します。これらの手順に従うことで、App Platform を使用してこのサンプルアプリケーションを実行できます。",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

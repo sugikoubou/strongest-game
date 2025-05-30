@@ -142,24 +142,3 @@ block content
       });
       updatePoints(); // 初期表示のため呼び出し
     }
-```
-
-**主な変更点:**
-
-1.  **コメント構文の修正**:
-    * `each char in characters // characters はソート前の全リストか、別途ソートされたリスト` を
-        `//- characters はソート前の全リストか、別途ソートされたリスト`
-        `each char in characters`
-        のように、コメントをループの直前の独立した行に移動し、Pugのサイレントコメント `//-` を使用しました。
-2.  **クライアントサイドJavaScriptのタイポ修正**:
-    * `if(createFormSplitter) createFormSubmitButton.disabled = false;` を `if (createFormSubmitButton) createFormSubmitButton.disabled = false;` に修正しました。
-3.  **JavaScriptの堅牢性向上**:
-    * `updatePoints` 関数の冒頭で、スライダー要素が存在するかどうかを確認するガード節を追加しました。これにより、万が一要素が見つからない場合にエラーが発生するのを防ぎます。
-    * 各値表示要素 (`strengthValueDisplay` など) も、更新前に存在確認を行うようにしました。
-4.  **HTML構造の微調整**:
-    * 対戦者選択フォームの `select` 要素の親 `div` に `mb-2` や `mb-3` (Bootstrapのようなマージンボトムクラスを想定) を追加して、要素間のスペースを調整しました。
-    * 対戦開始ボタンに `w-100` (Bootstrapのような横幅100%クラスを想定) を追加しました。
-    * 登録済みキャラクターリストの各アイテム内で、詳細情報とアクション（削除ボタン）を `div` でグループ化し、少しマージンを追加しました。
-
-この修正により、Pugの構文エラーが解消され、クライアントサイドJavaScriptの潜在的なエラーも修正されています。
-このコードを `views/index.pug` として使用し、バックエンド (`routes/index.js`) から適切なデータ (`userId`, `error`, `success`, `topCharacters`, `characters`) が渡されれば、期待通りに動作するはず

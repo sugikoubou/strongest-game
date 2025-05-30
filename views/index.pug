@@ -69,13 +69,13 @@ block content
             label(for="fighter1Select") あなたのキャラクター (対戦者1):
             select(id="fighter1Select", name="fighter1Id", required, class="form-control")
               option(value="") --自分のキャラを選択--
-              each char in myCharacters // 自分のキャラクターリストから選択
+              each char in myCharacters
                 option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
           div.fighter-select.mb-3
             label(for="fighter2Select") 対戦相手 (勝率上位より選択):
             select(id="fighter2Select", name="fighter2Id", required, class="form-control")
               option(value="") --対戦相手を選択--
-              //- ★ ループ対象を opponentCharacters (勝率上位5名) に変更
+              
               each char in opponentCharacters 
                 option(value=char.id) #{char.name} (#{char.ownerId === userId ? '自分' : '他ユーザー'}) - #{char.wins || 0}勝 #{char.losses || 0}敗, 勝率#{(char.winRate * 100).toFixed(1)}%
         button(type="submit", class="btn btn-danger btn-battle w-100") 対戦開始！

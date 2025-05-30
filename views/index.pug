@@ -96,7 +96,7 @@ block content
             div.actions.mt-2 // mt-2 for spacing
               //- 削除ボタンなど、必要に応じて追加
               form(action=`/delete-character/${char.id}`, method="POST", style="display: inline;" onsubmit="return confirm('本当に「' + '#{char.name}' + '」を削除しますか？');")
-                input(type="hidden", name="userId", value=userId) // 削除時にもuserIdを渡す
+                input(type="hidden", name="userId", value=userId)
                 button(type="submit", class="btn btn-sm btn-outline-danger") 削除
     else
       p キャラクターがいません。作成してください。

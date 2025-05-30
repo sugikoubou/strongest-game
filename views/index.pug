@@ -58,33 +58,29 @@ block content
     else
       p ランキング対象のキャラクターがいません。
 
-  // 全キャラクターリスト表示と対戦選択フォーム
-  div.container.full-character-list-section
+  div.container.full-character-list-section // クラス名は見直しても良い
     h2 対戦キャラクター選択
-    if allPublicCharacters && allPublicCharacters.length > 0
+    //- opponentCharacters はバックエンドから渡される勝率上位5名のリスト
+    if opponentCharacters && opponentCharacters.length > 0 
       form(action="/battle", method="POST")
-        input(type="hidden", name="userId", value=userId) 
+        input(type="hidden", name="userId", value=userId) // 操作ユーザーのID
         div.battle-selection
           div.fighter-select.mb-2
             label(for="fighter1Select") あなたのキャラクター (対戦者1):
             select(id="fighter1Select", name="fighter1Id", required, class="form-control")
               option(value="") --自分のキャラを選択--
-              //- myCharacters は、GET / ルートで currentUserId のキャラのみをフィルタリングして渡す
-              each char in myCharacters 
+              each char in myCharacters // 自分のキャラクターリストから選択
                 option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
           div.fighter-select.mb-3
-            label(for="fighter2Select") 対戦相手 (公開キャラから選択):
+            label(for="fighter2Select") 対戦相手 (勝率上位より選択):
             select(id="fighter2Select", name="fighter2Id", required, class="form-control")
               option(value="") --対戦相手を選択--
-              //- allPublicCharacters には自分以外のキャラも表示、または全キャラ表示して選択
-              each char in allPublicCharacters
-                //- オプション: 自分自身との対戦を除外する場合はここでフィルタリング
-                //- if char.id !== valueOfFighter1Selected (クライアントサイドJSでの制御が必要になるかも)
-                //- または、単に全キャラリストを表示
-                option(value=char.id) #{char.name} (#{char.ownerId === userId ? '自分' : '他ユーザー'}) - #{char.wins || 0}勝 #{char.losses || 0}敗
+              //- ★ ループ対象を opponentCharacters (勝率上位5名) に変更
+              each char in opponentCharacters 
+                option(value=char.id) #{char.name} (#{char.ownerId === userId ? '自分' : '他ユーザー'}) - #{char.wins || 0}勝 #{char.losses || 0}敗, 勝率#{(char.winRate * 100).toFixed(1)}%
         button(type="submit", class="btn btn-danger btn-battle w-100") 対戦開始！
     else
-      p 対戦可能なキャラクターがいません。
+      p 対戦可能な上位キャラクターがいません。
 
   // 自分のキャラクターリスト (表示用)
   div.container

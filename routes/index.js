@@ -228,7 +228,7 @@ router.post('/battle', async function(req, res, next) {
 
 /* GET home page. */
 router.get('/', async function(req, res, next) {
-  const currentUserId = req.query.userId || 'defaultUser'; // 現在の操作ユーザーID
+  const currentUserId = req.query.userId || 'defaultUser';
   let successMessage = null;
   let errorMessage = null;
 
@@ -241,7 +241,7 @@ router.get('/', async function(req, res, next) {
 
   try {
     const publicCharactersRef = req.db.ref('publicCharacters');
-    const snapshot = await publicCharactersRef.orderByChild('createdAt').once('value'); // createdAtでソート
+    const snapshot = await publicCharactersRef.orderByChild('createdAt').once('value');
     const allCharactersData = snapshot.val();
     
     const allCharactersList = [];
@@ -250,6 +250,7 @@ router.get('/', async function(req, res, next) {
     if (allCharactersData) {
       for (const key in allCharactersData) {
         const char = allCharactersData[key];
+        // ... (勝率計算などのロジックは前回と同様) ...
         const wins = char.wins || 0;
         const losses = char.losses || 0;
         const totalGames = wins + losses;
@@ -277,24 +278,22 @@ router.get('/', async function(req, res, next) {
       }
     }
 
-    // 全キャラクターを勝率でソート (ランキング用)
     const sortedAllCharacters = [...allCharactersList].sort((a, b) => {
         if (b.winRate !== a.winRate) return b.winRate - a.winRate;
         if (b.totalGames !== a.totalGames) return b.totalGames - a.totalGames;
-        return (a.createdAt > b.createdAt) ? -1 : 1; // より新しいもの
+        return (a.createdAt > b.createdAt) ? -1 : 1;
     });
-    const topCharacters = sortedAllCharacters.slice(0, 5); // 上位5名
+    const topCharactersToBattle = sortedAllCharacters.slice(0, 5); // ★ 対戦相手候補リスト
 
-    // 自分のキャラクターもソート (例: 作成日時順)
     myCharactersList.sort((a,b) => (a.createdAt > b.createdAt) ? -1 : 1);
-
 
     res.render('index', {
       title: 'キャラクター対戦ゲーム',
       userId: currentUserId,
-      myCharacters: myCharactersList,      // 自分のキャラクターリスト
-      allPublicCharacters: allCharactersList, // 対戦相手選択用 (自分も含む全キャラ)
-      topCharacters: topCharacters,         // 勝率上位キャラクター
+      myCharacters: myCharactersList,              // 自分のキャラクターリスト (対戦者1用)
+      topCharactersForRanking: topCharactersToBattle, // 勝率ランキング表示用 (同じものを流用)
+      opponentCharacters: topCharactersToBattle,   // ★ 対戦相手選択用リスト (勝率上位5名)
+      allPublicCharacters: allCharactersList,      // (もし全キャラリストも表示する場合)
       success: successMessage,
       error: errorMessage
     });
@@ -303,6 +302,7 @@ router.get('/', async function(req, res, next) {
     next(error);
   }
 });
+
 
 /* POST delete character */
 router.post('/delete-character/:charId', async function(req, res, next) {

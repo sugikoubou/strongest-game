@@ -16,6 +16,7 @@ if (process.env.GEMINI_API_KEY) {
             responseMimeType: "application/json",
         }
     });
+    
     console.log("Google AI SDK (generativeModelInstance) initialized in app.js.");
 } else {
     console.warn("GEMINI_API_KEY is not set in app.js. AI battle functionality will be disabled.");

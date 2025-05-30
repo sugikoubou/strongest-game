@@ -58,12 +58,12 @@ block content
     else
       p ランキング対象のキャラクターがいません。
 
-  div.container.full-character-list-section // クラス名は見直しても良い
+  div.container.full-character-list-section
     h2 対戦キャラクター選択
     //- opponentCharacters はバックエンドから渡される勝率上位5名のリスト
     if opponentCharacters && opponentCharacters.length > 0 
       form(action="/battle", method="POST")
-        input(type="hidden", name="userId", value=userId) // 操作ユーザーのID
+        input(type="hidden", name="userId", value=userId)
         div.battle-selection
           div.fighter-select.mb-2
             label(for="fighter1Select") あなたのキャラクター (対戦者1):

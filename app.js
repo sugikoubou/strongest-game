@@ -1,94 +1,89 @@
+// 1. 必要なモジュールの require
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var admin = require("firebase-admin"); // Firebase Admin SDK
+const { GoogleGenerativeAI } = require("@google/generative-ai"); // Google AI SDK
 
+// ルーターの require
+var indexRouter = require('./routes/index');
 
-// app.js の冒頭あたり
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-let genAI, generativeModelInstance; // グローバルまたはappのローカル変数として保持
+// 2. Express アプリケーションのインスタンス化 (最優先事項の一つ)
+var app = express(); // ← これが app.use より必ず先に来る必要があります
+
+// 3. SDK の初期化
+// Firebase Admin SDK 初期化
+try {
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) { // Render の環境変数からJSON文字列を読み込む場合
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  } else { // ローカル開発用にファイルパスから読み込む場合など
+    serviceAccount = require("./your-service-account-key.json"); // 実際のファイルパスに置き換えてください
+  }
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL // 環境変数で設定
+  });
+  console.log("Firebase Admin SDK initialized successfully.");
+} catch (error) {
+  console.error("Error initializing Firebase Admin SDK:", error);
+  // 起動を中止するなどの処理が必要な場合
+  process.exit(1);
+}
+
+// Google AI SDK (Gemini) 初期化
+let generativeModelInstance;
 if (process.env.GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     generativeModelInstance = genAI.getGenerativeModel({
         model: "gemini-1.5-flash-latest",
         generationConfig: {
             responseMimeType: "application/json",
         }
     });
-    
     console.log("Google AI SDK (generativeModelInstance) initialized in app.js.");
 } else {
     console.warn("GEMINI_API_KEY is not set in app.js. AI battle functionality will be disabled.");
 }
 
-// ミドルウェアで generativeModel をリクエストオブジェクトに追加
+// 4. ビューエンジンの設定
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'pug');
+
+// 5. 標準的なミドルウェアの使用 (app の初期化後)
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public'))); // ← この行がエラー箇所(line 26)の可能性
+
+// 6. カスタムミドルウェア (DB参照やAIモデルをリクエストに追加)
 app.use(function(req, res, next){
-  req.db = admin.database(); // 既存のDB参照
+  req.db = admin.database(); // Realtime Databaseの参照
   if (generativeModelInstance) {
-    req.generativeModel = generativeModelInstance; // Geminiモデルの参照を追加
+    req.generativeModel = generativeModelInstance; // Geminiモデルの参照
   }
   next();
 });
 
-// Firebase Admin SDK のインポートと初期化
-var admin = require("firebase-admin");
-// ↓↓↓ サービスアカウントキーのJSONファイルへのパスを指定してください ↓↓↓
-var serviceAccount = require("./strongest-game-key.json"); // 例: ./serviceAccountKey.json
+// 7. ルーターのマウント
+app.use('/', indexRouter);
+// app.use('/users', usersRouter); // 必要であれば
 
-try {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    // ↓↓↓ Realtime DatabaseのURLを指定してください (Firebaseコンソールで確認できます) ↓↓↓
-    databaseURL: "https://strongest-game-default-rtdb.firebaseio.com/" // 例: "https://strongest-game.firebaseio.com"
-  });
-  console.log("Firebase Admin SDK initialized successfully.");
-} catch (error) {
-  console.error("Error initializing Firebase Admin SDK:", error);
-  // エラー処理: 初期化に失敗した場合、アプリの起動を中止するなどの対応
-  process.exit(1);
-}
-
-
-var indexRouter = require('./routes/index');
-// var usersRouter = require('./routes/users'); //
-
-var app = express();
-
-// view engine setup
-app.set('views', path.join(__dirname, 'views')); //
-app.set('view engine', 'pug'); //
-
-app.use(logger('dev')); //
-app.use(express.json()); //
-app.use(express.urlencoded({ extended: false })); //
-app.use(cookieParser()); //
-app.use(express.static(path.join(__dirname, 'public'))); //
-
-// indexRouter に Firebase Admin の db インスタンスを渡せるようにする
-// (ミドルウェアを使うか、直接渡すかは設計によります)
-app.use(function(req, res, next){
-  req.db = admin.database(); // Realtime Databaseの参照をリクエストオブジェクトに追加
-  next();
+// 8. 404エラーハンドラと通常のエラーハンドラ
+app.use(function(req, res, next) {
+  next(createError(404));
 });
 
-app.use('/', indexRouter); //
-// app.use('/users', usersRouter); //
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) { //
-  next(createError(404)); //
+app.use(function(err, req, res, next) {
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  res.status(err.status || 500);
+  res.render('error');
 });
 
-// error handler
-app.use(function(err, req, res, next) { //
-  // set locals, only providing error in development
-  res.locals.message = err.message; //
-  res.locals.error = req.app.get('env') === 'development' ? err : {}; //
-
-  // render the error page
-  res.status(err.status || 500); //
-  res.render('error'); //
-});
-
-module.exports = app; //
+// 9. モジュールのエクスポート
+module.exports = app;

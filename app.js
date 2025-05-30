@@ -32,10 +32,10 @@ try {
 
 } catch (error) {
   console.error("Error initializing Firebase Admin SDK:", error);
-  if (error instanceof SyntaxError && process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it's a valid JSON string.");
-  } else if (error.code === 'MODULE_NOT_FOUND' && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("Local service account key file not found and FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.");
+  if (error instanceof SyntaxError && process.env.GAME_JSON) {
+    console.error("Failed to parse GAMET_JSON. Ensure it's a valid JSON string.");
+  } else if (error.code === 'MODULE_NOT_FOUND' && !process.env.GAME_JSON) {
+    console.error("Local service account key file not found and GAME_JSON environment variable is not set.");
   }
   process.exit(1);
 }

@@ -60,46 +60,42 @@ block content
 
   // 全キャラクターリスト表示と対戦選択フォーム
   div.container.full-character-list-section
-    h2 全キャラクターリスト (#{userId})
-    if characters && characters.length > 0
+    h2 対戦キャラクター選択
+    if allPublicCharacters && allPublicCharacters.length > 0
       form(action="/battle", method="POST")
-        input(type="hidden", name="userId", value=userId)
+        input(type="hidden", name="userId", value=userId) 
         div.battle-selection
-          div.fighter-select.mb-2 // mb-2 for spacing
-            label(for="fighter1Select") 対戦者1:
+          div.fighter-select.mb-2
+            label(for="fighter1Select") あなたのキャラクター (対戦者1):
             select(id="fighter1Select", name="fighter1Id", required, class="form-control")
-              option(value="") --選択してください--
-              each char in characters
+              option(value="") --自分のキャラを選択--
+              //- myCharacters は、GET / ルートで currentUserId のキャラのみをフィルタリングして渡す
+              each char in myCharacters 
                 option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
-          div.fighter-select.mb-3 // mb-3 for more spacing before button
-            label(for="fighter2Select") 対戦者2:
+          div.fighter-select.mb-3
+            label(for="fighter2Select") 対戦相手 (公開キャラから選択):
             select(id="fighter2Select", name="fighter2Id", required, class="form-control")
-              option(value="") --選択してください--
-              each char in characters
-                option(value=char.id) #{char.name} (#{char.wins || 0}勝 #{char.losses || 0}敗)
-        button(type="submit", class="btn btn-danger btn-battle w-100") 対戦開始！ // w-100 for full width
-      
-      hr
-      h3 登録済みキャラクター:
-      ul.character-list.all-chars-list
-        //- characters はソート前の全リストか、別途ソートされたリスト
-        each char in characters 
-          li.character-item
-            div
-              strong.name #{char.name}
-              div.details
-                span 能力: #{char.ability}
-                br
-                span パラメータ: 力 #{char.strength}, 知 #{char.intelligence}, 速 #{char.agility}
-                br
-                span.stats 戦績: #{char.wins || 0}勝 #{char.losses || 0}敗
-            div.actions.mt-2 // mt-2 for spacing
-              //- 削除ボタンなど、必要に応じて追加
-              form(action=`/delete-character/${char.id}`, method="POST", style="display: inline;" onsubmit="return confirm('本当に「' + '#{char.name}' + '」を削除しますか？');")
-                input(type="hidden", name="userId", value=userId)
-                button(type="submit", class="btn btn-sm btn-outline-danger") 削除
+              option(value="") --対戦相手を選択--
+              //- allPublicCharacters には自分以外のキャラも表示、または全キャラ表示して選択
+              each char in allPublicCharacters
+                //- オプション: 自分自身との対戦を除外する場合はここでフィルタリング
+                //- if char.id !== valueOfFighter1Selected (クライアントサイドJSでの制御が必要になるかも)
+                //- または、単に全キャラリストを表示
+                option(value=char.id) #{char.name} (#{char.ownerId === userId ? '自分' : '他ユーザー'}) - #{char.wins || 0}勝 #{char.losses || 0}敗
+        button(type="submit", class="btn btn-danger btn-battle w-100") 対戦開始！
     else
-      p キャラクターがいません。作成してください。
+      p 対戦可能なキャラクターがいません。
+
+  // 自分のキャラクターリスト (表示用)
+  div.container
+    h2 あなたの登録済みキャラクター (#{userId})
+    if myCharacters && myCharacters.length > 0
+      ul.character-list.all-chars-list
+        each char in myCharacters
+          li.character-item
+            // ... (キャラクター詳細と削除ボタン) ...
+    else
+      p キャラクターが登録されていません。作成してください。
 
   // クライアントサイドJavaScript (パラメータ合計計算)
   script.

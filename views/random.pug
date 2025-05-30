@@ -18,3 +18,17 @@ block content
       label(for="valueInput") 値:
       input(type="number" id="valueInput" name="value" value="100")
     button(type="submit") 保存
+
+
+  div.character-list
+  h2 あなたのキャラクターリスト (<%= userId %>)
+  if characters && characters.length > 0
+    ul
+      each char in characters
+        li
+          strong #{char.name}
+          span  (能力: #{char.ability}, 力: #{char.strength}, 知: #{char.intelligence}, 速: #{char.agility})
+          span  - 戦績: #{char.wins || 0}勝 #{char.losses || 0}敗
+          //- 対戦選択や削除ボタンなど
+  else
+    p キャラクターがいません。作成してください。

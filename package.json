@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "clean-css": "^4.1.11",
+    "clean-css": "^5.3.3",
     "constantinople": "^3.1.1",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",

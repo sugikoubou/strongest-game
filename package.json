@@ -16,7 +16,7 @@
     "express": "~4.16.1",
     "firebase-admin": "^13.4.0",
     "http-errors": "~1.6.3",
-    "lorem-ipsum": "^2.0.3",
+    "lorem-ipsum": "^2.0.8",
     "md5": "^2.2.1",
     "mersenne-twister": "^1.1.0",
     "morgan": "~1.9.1",

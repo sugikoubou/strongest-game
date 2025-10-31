@@ -21,7 +21,7 @@
     "mersenne-twister": "^1.1.0",
     "morgan": "~1.9.1",
     "pug": "^2.0.4",
-    "uglify-js": "^2.6.0"
+    "uglify-js": "^3.19.3"
   },
   "description": "App Platform にデプロイできる Node.js を使用したサンプルアプリを提供します。これらの手順に従うことで、App Platform を使用してこのサンプルアプリケーションを実行できます。",
   "main": "index.js",
